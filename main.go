@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	// TODO remove io/ioutil in favor of just io
 	"io/ioutil"
@@ -35,13 +34,7 @@ var stats = make(map[string]*DomainStats)
 func checkHealth(endpoint Endpoint) {
 	var client = &http.Client{}
 
-	bodyBytes, err := json.Marshal(endpoint)
-	if err != nil {
-		log.Printf("%v, %v to %v, failed to marshal json: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
-		return
-	}
-	reqBody := bytes.NewReader(bodyBytes)
-
+	reqBody := bytes.NewReader([]byte(endpoint.Body))
 	req, err := http.NewRequest(endpoint.Method, endpoint.URL, reqBody)
 	if err != nil {
 		log.Printf("%v, %v to %v, error creating request: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)

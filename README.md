@@ -26,6 +26,26 @@ status), I saw that the `endpoint.Method` was empty.
 Although I think Go may default the request method to GET if an empty string is
 provided, explicitly defaulting the Method to a non-empty `"GET"` string more
 clearly conveys intent.
-It will also potentially shield a possibly difficult-to-track-down issue if the
-behavior of `http.NewRequest` changes how it handles an empty-string `""` method
-between Go versions (unlikely but has happened in libraries before).
+It will also potentially shield against possibly difficult-to-track-down issue
+if the behavior of `http.NewRequest` changes how it handles an empty-string
+`""` method between Go versions (unlikely but has happened in libraries before).
+
+### Create a reader for `endpoint.Body` instead of a JSON-serialized `endpoint`
+##### Discovery
+I initially noticed that we were marshalling the entire `endpoint` into a reader
+for the request body instead of the `endpoint.Body` field while walking through
+the code in a debugger.
+I also noticed that an endpoint was responding with a 422 status code (courtesy
+of additional logging I added), but the name of that endpoint in the YAML file
+implied that the status should've been in the 200 range.
+
+##### Why?
+The YAML explanation in the PDF explicitly states that the `encoding.Body` is
+the HTTP body to include in the request, and that if it's present it will be a
+valid JSON-encoded string.
+Therefore, I could just make a reader from the bytes of the `encoding.Body`
+string without having to worry about marshalling any JSON.
+Additionally, the documentation for `http.NewRequestWithContext` (which
+`http.NewRequest` wraps) states that Body will be set to `NoBody` and
+the request's ContentLength will be set to 0 if the `bytes.Reader` has no
+content, which should be true in the case of a reader for an empty string.
