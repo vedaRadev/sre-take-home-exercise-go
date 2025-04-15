@@ -10,11 +10,18 @@ TODO description of the program
 
 TODO installation info
 
-## Improvements
+## Fixes and Improvements
 
-- Added additional logging to aid in identification of errors.
+### Added additional logging
+##### Discovery
+N/A
 
-## Fixes
+##### Why?
+To aid in the identification of errors.
+An even more robust logging system would also flush logs to a file but that
+would usually require a custom logging system.
+I haven't explored if Go has a built-in method of easily logging to
+stdout/stderr AND a file in one call or in a centralized manner.
 
 ### Default endpoint.Method to "GET"
 ##### Discovery
