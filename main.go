@@ -67,7 +67,7 @@ func checkHealth(endpoint Endpoint) {
 		log.Printf("%v, %v to %v, response %v. Reading body...\n", endpoint.Name, endpoint.Method, endpoint.URL, resp.StatusCode)
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Printf("failed to read body: %v\n", err)
+			log.Printf("%v, %v to %v: failed to read body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
 			return
 		}
 		log.Printf("%v, %v to %v, body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, string(bodyBytes))
@@ -119,6 +119,12 @@ func main() {
 	var endpoints []Endpoint
 	if err := yaml.Unmarshal(data, &endpoints); err != nil {
 		log.Fatal("Error parsing YAML:", err)
+	}
+
+	// Default values as required
+	for i := range endpoints {
+		endpoint := &endpoints[i]
+		if endpoint.Method == "" { endpoint.Method = "GET" }
 	}
 
 	monitorEndpoints(endpoints)

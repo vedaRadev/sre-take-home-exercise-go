@@ -1,21 +1,31 @@
-# Title Here
+Ryan Armstrong 2025
+
+# Fetch SRE Challenge
 
 ## About
 
-TODO
+TODO description of the program
 
 ## Installation
 
-TODO
+TODO installation info
 
-## Fixes and Improvements
+## Improvements
 
-### Example Issue 1
-Quick discussion of how this issue was found.
+- Added additional logging to aid in identification of errors.
 
-Quick discussion of why the change was made.
+## Fixes
 
-### Example Issue 2
-Quick discussion of how this issue was found.
+### Default endpoint.Method to "GET"
+##### Discovery
+Issue discovered with the aid of additional logging mechanisms.
+When a request to an endpoint failed (errored or returned with a non-200-range
+status), I saw that the `endpoint.Method` was empty.
 
-Quick discussion of why the change was made.
+##### Why?
+Although I think Go may default the request method to GET if an empty string is
+provided, explicitly defaulting the Method to a non-empty `"GET"` string more
+clearly conveys intent.
+It will also potentially shield a possibly difficult-to-track-down issue if the
+behavior of `http.NewRequest` changes how it handles an empty-string `""` method
+between Go versions (unlikely but has happened in libraries before).
