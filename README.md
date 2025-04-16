@@ -11,6 +11,7 @@ TODO description of the program
 TODO installation info
 
 ## Fixes and Improvements
+Note: All fixes and improvements here are listed in the order they were added.
 
 ### Added additional logging
 ##### Discovery
@@ -56,3 +57,24 @@ Additionally, the documentation for `http.NewRequestWithContext` (which
 `http.NewRequest` wraps) states that Body will be set to `NoBody` and
 the request's ContentLength will be set to 0 if the `bytes.Reader` has no
 content, which should be true in the case of a reader for an empty string.
+
+### Add a timeout context with a 500ms deadline to the request
+##### Discovery
+I was able to tell just by looking at the `checkHealth` that we weren't creating
+a request with a context containing a timeout. At this point I've also been
+working with this function for a bit and I've examined the program flow with a
+debugger several times.
+
+##### Why?
+The PDF explicitly states that endpoints that do not respond within 500ms should
+be considered unavailable.
+Creating a request with a context that contains a deadline will allow Go to
+abort the request (and any Goroutines that may have been spawned in the process
+of making it, provided they have the deadline context and are well-behaved) if
+the deadline is exceeded.
+There's no point in waiting for a response past 500ms so we'll just continue on
+and make sure to free the context's resources with the deferred `cancel()` call.
+
+##### Additional Note
+I also added the ability to disable the 500ms request timeout by passing
+`--no-req-timeout` as a command-line argument for the purposes of debugging.

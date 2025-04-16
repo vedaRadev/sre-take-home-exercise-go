@@ -1,0 +1,7 @@
+- name: times out after 500ms
+  method: GET
+  url: https://postman-echo.com/delay/1
+
+- name: succeeds within 500ms
+  method: GET
+  url: https://postman-echo.com/get

@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"context"
 
 	"gopkg.in/yaml.v3"
 )
@@ -31,11 +32,19 @@ type DomainStats struct {
 
 var stats = make(map[string]*DomainStats)
 
-func checkHealth(endpoint Endpoint) {
+func checkHealth(endpoint Endpoint, isTimeoutDisabled bool) {
 	var client = &http.Client{}
 
+	reqCtx := context.Background()
+	if !isTimeoutDisabled {
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), 500 * time.Millisecond)
+		defer cancel()
+		reqCtx = timeoutCtx
+	}
+
+
 	reqBody := bytes.NewReader([]byte(endpoint.Body))
-	req, err := http.NewRequest(endpoint.Method, endpoint.URL, reqBody)
+	req, err := http.NewRequestWithContext(reqCtx, endpoint.Method, endpoint.URL, reqBody)
 	if err != nil {
 		log.Printf("%v, %v to %v, error creating request: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
 		return
@@ -45,11 +54,16 @@ func checkHealth(endpoint Endpoint) {
 		req.Header.Set(key, value)
 	}
 
+	sentTime := time.Now()
 	resp, err := client.Do(req)
-	domain := extractDomain(endpoint.URL)
+	receivedTime := time.Now()
+	reqTime := receivedTime.Sub(sentTime)
+	log.Printf("%v, %v to %v responded or was aborted in %v\n", endpoint.Name, endpoint.Method, endpoint.URL, reqTime)
 
+	domain := extractDomain(endpoint.URL)
 	stats[domain].Total++
 	if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		log.Printf("%v, %v to %v: success\n", endpoint.Name, endpoint.Method, endpoint.URL)
 		stats[domain].Success++
 	} else {
 		if err != nil {
@@ -73,7 +87,7 @@ func extractDomain(url string) string {
 	return domain
 }
 
-func monitorEndpoints(endpoints []Endpoint) {
+func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
 	for _, endpoint := range endpoints {
 		domain := extractDomain(endpoint.URL)
 		if stats[domain] == nil {
@@ -83,7 +97,7 @@ func monitorEndpoints(endpoints []Endpoint) {
 
 	for {
 		for _, endpoint := range endpoints {
-			checkHealth(endpoint)
+			checkHealth(endpoint, isTimeoutDisabled)
 		}
 		logResults()
 		time.Sleep(15 * time.Second)
@@ -99,7 +113,7 @@ func logResults() {
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("Usage: go run main.go <config_file>")
+		log.Fatal("Usage: go run main.go <config_file> [--no-req-timeout]")
 	}
 
 	filePath := os.Args[1]
@@ -107,6 +121,15 @@ func main() {
 	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		log.Fatal("Error reading file:", err)
+	}
+
+	// TODO If I end up adding more options, do more advanced arg parsing
+	isTimeoutDisabled := false
+	if len(os.Args) == 3 {
+		if os.Args[2] != "--no-req-timeout" {
+			log.Fatal("Error, unrecognized option:", os.Args[3])
+		}
+		isTimeoutDisabled = true
 	}
 
 	var endpoints []Endpoint
@@ -120,5 +143,5 @@ func main() {
 		if endpoint.Method == "" { endpoint.Method = "GET" }
 	}
 
-	monitorEndpoints(endpoints)
+	monitorEndpoints(endpoints, isTimeoutDisabled)
 }
