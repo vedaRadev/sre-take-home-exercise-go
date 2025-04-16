@@ -78,3 +78,26 @@ and make sure to free the context's resources with the deferred `cancel()` call.
 ##### Additional Note
 I also added the ability to disable the 500ms request timeout by passing
 `--no-req-timeout` as a command-line argument for the purposes of debugging.
+
+### Run domain requests concurrently, limiting the number of in-flight requests per-domain
+##### Discovery
+Just looking at the code I was able to see that it was running requests serially
+instead of concurrently.
+
+##### Why?
+Even though this doesn't directly address the requirement that check cycles
+should be run every 15 seconds, the intent is to prepare for an upcoming change
+that _will_ address it.
+As a thought exercise, assume that we _are_ kicking off check cycles every 15
+seconds as required and that we have many endpoints, a not-insignificant number
+of which are timing out at the 500ms threshold.
+We will not be able to visit endpoints quickly enough to obtain a very practical
+availability report every 15 seconds.
+Making requests concurrently will allow us to chew through checks more quickly
+and hopefully avoid that scenario.
+
+I limited the number of in-flight requests _per domain_ so that we can still
+make as many checks as possible while avoiding undue stress to systems since
+this is an availability check, not a stress test.
+Also I'm using a few different domains in my custom `test.yaml` and I don't
+want to be rate limited or, worse, IP banned for request spamming.
