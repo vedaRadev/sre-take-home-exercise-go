@@ -1,7 +1,69 @@
-- name: times out after 500ms
+##############################
+# POSTMAN ECHO
+##############################
+- name: postman echo -- times out after 500ms (1)
   method: GET
-  url: https://postman-echo.com/delay/1
+  url: https://postman-echo.com/delay/5
 
-- name: succeeds within 500ms
+- name: postman echo -- times out after 500ms (2)
+  method: GET
+  url: https://postman-echo.com/delay/5
+
+- name: postman echo -- times out after 500ms (3)
+  method: GET
+  url: https://postman-echo.com/delay/5
+
+- name: postman echo -- succeeds within 500ms
   method: GET
   url: https://postman-echo.com/get
+
+- name: postman echo -- successful post
+  method: POST
+  url: https://postman-echo.com/post
+  headers:
+    content-type: application/json
+  body: '{"hello":"world"}'
+
+##############################
+# HTTPBIN
+# Note: httpbin is sometimes slow to respond so many of these may fail due to
+# the 500ms threshold.
+##############################
+
+- name: httpbin -- simple get
+  url: https://httpbin.org/get
+
+- name: httpbin -- times out after 500ms
+  url: https://httpbin.org/delay/5
+
+- name: httpbin -- return non-200 (1)
+  url: https://httpbin.org/status/300
+
+- name: httpbin -- return non-200 (1)
+  url: https://httpbin.org/status/400
+
+- name: httpbin -- return non-200 (1)
+  url: https://httpbin.org/status/500
+
+##############################
+# FETCH SRE SAMPLE DOMAIN
+##############################
+- body: '{"foo":"bar"}'
+  headers:
+    content-type: application/json
+  method: POST
+  name: fetch sre -- sample body up
+  url: https://dev-sre-take-home-exercise-rubric.us-east-1.recruiting-public.fetchrewards.com/body
+
+- name: fetch sre -- sample index up
+  url: https://dev-sre-take-home-exercise-rubric.us-east-1.recruiting-public.fetchrewards.com/
+
+- body: "{}"
+  headers:
+    content-type: application/json
+  method: POST
+  name: fetch sre -- sample body down
+  url: https://dev-sre-take-home-exercise-rubric.us-east-1.recruiting-public.fetchrewards.com/body
+
+- name: fetch sre -- sample error down
+  url: https://dev-sre-take-home-exercise-rubric.us-east-1.recruiting-public.fetchrewards.com/error

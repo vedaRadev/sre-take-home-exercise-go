@@ -34,20 +34,18 @@ type DomainStats struct {
 var stats = make(map[string]*DomainStats)
 var statsMutex sync.Mutex
 
-// TODO Maybe name this something better? It's specifically for managing the concurrency of endpoint
-// check requests but the name itself doesn't reflect that.
-type ConcurrencyControl struct {
-	wg *sync.WaitGroup
-	// Used to limit the number of in-flight requests at any given time
-	semaphore chan struct{}
+type Semaphore chan struct{}
+func (s Semaphore) Down() { s <- struct{}{} }
+func (s Semaphore) Up() { <- s }
+func NewSemaphore(capacity int) (Semaphore, error) {
+	if capacity <= 0 { return nil, fmt.Errorf("semaphore capacity must be greater than 0") }
+	return make(Semaphore, capacity), nil
 }
 
-func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, concurrencyControl *ConcurrencyControl) {
-	concurrencyControl.semaphore <- struct{}{}
-	defer func(){
-		<- concurrencyControl.semaphore
-		concurrencyControl.wg.Done()
-	}()
+func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, semaphore Semaphore) {
+	semaphore.Down()
+	defer semaphore.Up()
+	defer wg.Done()
 
 	var client = &http.Client{}
 
@@ -110,28 +108,31 @@ func extractDomain(url string) string {
 	return domain
 }
 
+// TODO default to 10 or so but allow the the number of goroutines per domain for requests to be passed in via command line
+const MAX_CONCURRENCY_PER_DOMAIN int = 10
 func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
+	var domainConcurrencyControl = make(map[string]Semaphore)
 	for _, endpoint := range endpoints {
 		domain := extractDomain(endpoint.URL)
 		if stats[domain] == nil {
 			stats[domain] = &DomainStats{}
 		}
+		if domainConcurrencyControl[domain] == nil {
+			semaphore, err := NewSemaphore(MAX_CONCURRENCY_PER_DOMAIN)
+			if err != nil { log.Fatalf("failed to create semaphore for domain %v: %v", domain, err) }
+			domainConcurrencyControl[domain] = semaphore
+		}
 	}
 
 	var wg sync.WaitGroup
-	// TODO default to 10 or so but allow the the number of goroutines for requests to be passed in via command line
-	goroutineLimiter := make(chan struct{}, 10)
-	concurrencyControl := ConcurrencyControl {
-		wg: &wg,
-		semaphore: goroutineLimiter,
-	}
 	for {
 		// TODO need to ensure that checks and logs run every 15 seconds regardless of the previous
 		// cycle completion. Right now we're doing our checks then waiting 15 seconds to try again
 		// regardless of the time the checks themselves took.
 		for _, endpoint := range endpoints {
 			wg.Add(1)
-			go checkHealth(endpoint, isTimeoutDisabled, &concurrencyControl)
+			domain := extractDomain(endpoint.URL)
+			go checkHealth(endpoint, isTimeoutDisabled, &wg, domainConcurrencyControl[domain])
 		}
 		wg.Wait()
 		logResults()
