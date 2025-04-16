@@ -9,11 +9,11 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 	"context"
 	"sync"
+	"os"
 
 	"gopkg.in/yaml.v3"
 )
@@ -38,49 +38,6 @@ func NewSemaphore(capacity int) (Semaphore, error) {
 	if capacity <= 0 { return nil, fmt.Errorf("semaphore capacity must be greater than 0") }
 	return make(Semaphore, capacity), nil
 }
-
-type SyncedPrinter struct  { mu sync.Mutex }
-
-func (tsl *SyncedPrinter) Logf(format string, params ...any) {
-	tsl.mu.Lock()
-	defer tsl.mu.Unlock()
-	log.Printf(format, params...)
-}
-
-func (tsl *SyncedPrinter) LogfBypassLock(format string, params ...any) {
-	log.Printf(format, params...)
-}
-
-func (tsl *SyncedPrinter) LogLine(line string) {
-	tsl.mu.Lock()
-	defer tsl.mu.Unlock()
-	log.Println(line)
-}
-
-func (tsl *SyncedPrinter) LogLineBypassLock(line string) {
-	log.Println(line)
-}
-
-func (tsl *SyncedPrinter) Printf(format string, params ...any) {
-	tsl.mu.Lock()
-	defer tsl.mu.Unlock()
-	fmt.Printf(format, params...)
-}
-
-func (tsl *SyncedPrinter) PrintfBypassLock(format string, params ...any) {
-	fmt.Printf(format, params...)
-}
-
-func (tsl *SyncedPrinter) Println(line string) {
-	tsl.mu.Lock()
-	defer tsl.mu.Unlock()
-	fmt.Println(line)
-}
-
-func (tsl *SyncedPrinter) PrintlnBypassLock(line string) {
-	fmt.Println(line)
-}
-
 
 // TODO default to 10 or so but allow the the number of goroutines per domain for requests to be passed in via command line
 const MAX_CONCURRENCY_PER_DOMAIN int = 10
@@ -118,7 +75,7 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, 
 	resp, err := client.Do(req)
 	receivedTime := time.Now()
 	reqTime := receivedTime.Sub(sentTime)
-	syncedPrinter.Logf("%v, %v to %v responded or was aborted in %v\n", endpoint.Name, endpoint.Method, endpoint.URL, reqTime)
+	syncedPrinter.DebugLogf("%v, %v to %v responded or was aborted in %v\n", endpoint.Name, endpoint.Method, endpoint.URL, reqTime)
 
 	domain := extractDomain(endpoint.URL)
 
@@ -129,23 +86,29 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, 
 	// than it should be.
 	stats[domain].Total++
 	if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		syncedPrinter.Logf("%v, %v to %v: success\n", endpoint.Name, endpoint.Method, endpoint.URL)
+		syncedPrinter.DebugLogf("%v, %v to %v: success\n", endpoint.Name, endpoint.Method, endpoint.URL)
 		stats[domain].Success++
 		statsMutex.Unlock()
 	} else {
 		statsMutex.Unlock()
 		if err != nil {
-			syncedPrinter.Logf("%v, %v to %v failed: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
+			syncedPrinter.DebugLogf("%v, %v to %v failed: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
 			return
 		}
 
-		syncedPrinter.Logf("%v, %v to %v, response %v. Reading body...\n", endpoint.Name, endpoint.Method, endpoint.URL, resp.StatusCode)
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			syncedPrinter.Logf("%v, %v to %v: failed to read body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
-			return
+		// TODO maybe debugEnabled should just be a global value, or maybe passed in? Seems weird to
+		// be checking if the syncedPrinter has _it's_ debug stuff enabled here...
+		// Should be okay for now. Will change if we keep doing this in the future.
+		if syncedPrinter.debugEnabled {
+			// Don't need to use Debug functions here because we already checked above
+			syncedPrinter.Logf("%v, %v to %v, response %v. Reading body...\n", endpoint.Name, endpoint.Method, endpoint.URL, resp.StatusCode)
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				syncedPrinter.Logf("%v, %v to %v: failed to read body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
+				return
+			}
+			syncedPrinter.Logf("%v, %v to %v, body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, string(bodyBytes))
 		}
-		syncedPrinter.Logf("%v, %v to %v, body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, string(bodyBytes))
 	}
 }
 
@@ -179,22 +142,25 @@ func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
 			cycleCount += 1
 			thisCycleCount := cycleCount
 			var wg sync.WaitGroup
-			syncedPrinter.mu.Lock()
-			syncedPrinter.PrintlnBypassLock("==============================")
-			syncedPrinter.LogfBypassLock("CHECK CYCLE %v BEGIN\n", thisCycleCount)
-			syncedPrinter.PrintlnBypassLock("==============================")
-			syncedPrinter.mu.Unlock()
+			syncedPrinter.DebugLock()
+			syncedPrinter.DebugPrintlnBypassLock("==============================")
+			syncedPrinter.DebugLogfBypassLock("CHECK CYCLE %v BEGIN\n", thisCycleCount)
+			syncedPrinter.DebugPrintlnBypassLock("==============================")
+			syncedPrinter.DebugUnlock()
+
 			for _, endpoint := range endpoints {
 				wg.Add(1)
 				domain := extractDomain(endpoint.URL)
 				go checkHealth(endpoint, isTimeoutDisabled, &wg, domainConcurrencyControl[domain])
 			}
 			wg.Wait()
-			syncedPrinter.mu.Lock()
-			syncedPrinter.PrintlnBypassLock("==============================")
-			syncedPrinter.LogfBypassLock("CHECK CYCLE %v END\n", thisCycleCount)
-			syncedPrinter.PrintlnBypassLock("==============================")
-			syncedPrinter.mu.Unlock()
+
+			syncedPrinter.DebugLock()
+			syncedPrinter.DebugPrintlnBypassLock("==============================")
+			syncedPrinter.DebugLogfBypassLock("CHECK CYCLE %v END\n", thisCycleCount)
+			syncedPrinter.DebugPrintlnBypassLock("==============================")
+			syncedPrinter.DebugUnlock()
+
 			logResults()
 		}()
 
@@ -204,9 +170,9 @@ func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
 
 func logResults() {
 	statsMutex.Lock()
-	syncedPrinter.mu.Lock()
+	syncedPrinter.Lock()
 	defer statsMutex.Unlock()
-	defer syncedPrinter.mu.Unlock()
+	defer syncedPrinter.Unlock()
 	syncedPrinter.PrintlnBypassLock("==============================")
 	syncedPrinter.LogfBypassLock("AVAILABILITY REPORT")
 	for domain, stat := range stats {
@@ -217,24 +183,41 @@ func logResults() {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatal("Usage: go run main.go <config_file> [--no-req-timeout]")
+	var filePath string
+	var isTimeoutDisabled bool
+	var isDebugEnabled bool
+
+	filePathParsed := false
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--") {
+			switch arg[2:] {
+
+			case "no-req-timeout":
+				isTimeoutDisabled = true
+
+			case "debug-logs":
+				isDebugEnabled = true
+
+			default:
+				log.Fatal("unrecognized flag: ", arg)
+
+			}
+		} else if !filePathParsed {
+			filePathParsed = true
+			filePath = arg
+		} else {
+			log.Fatal("multiple config files is not supported")
+		}
 	}
 
-	filePath := os.Args[1]
+	if filePath == "" {
+		log.Fatal("Usage: go run main.go <config_file> [--no-req-timeout] [--debug-logs]")
+	}
+
 	// TODO ioutil is deprecated as of Go 1.16. Use os.ReadFile instead.
 	data, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		log.Fatal("Error reading file:", err)
-	}
-
-	// TODO If I end up adding more options, do more advanced arg parsing
-	isTimeoutDisabled := false
-	if len(os.Args) == 3 {
-		if os.Args[2] != "--no-req-timeout" {
-			log.Fatal("Error, unrecognized option:", os.Args[3])
-		}
-		isTimeoutDisabled = true
 	}
 
 	var endpoints []Endpoint
@@ -248,5 +231,6 @@ func main() {
 		if endpoint.Method == "" { endpoint.Method = "GET" }
 	}
 
+	syncedPrinter.debugEnabled = isDebugEnabled
 	monitorEndpoints(endpoints, isTimeoutDisabled)
 }
