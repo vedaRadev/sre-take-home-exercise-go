@@ -101,3 +101,16 @@ make as many checks as possible while avoiding undue stress to systems since
 this is an availability check, not a stress test.
 Also I'm using a few different domains in my custom `test.yaml` and I don't
 want to be rate limited or, worse, IP banned for request spamming.
+
+### Make `extractDomain` port-agnostic
+##### Discovery
+I had a hunch that the function wasn't stripping the port number so I wrote a
+simple unit test for it and tested a few cases. Lo and behold, it wasn't
+stripping the port.
+
+##### Why?
+Well, the requirements specifically state that we must ignore port numbers when
+determining the domain. But, more technically, there's not anything stopping
+someone from setting up a two different services to run on the same domain but
+different ports (for example, maybe a public API runs on port X but static
+content is served from port Y or something, I don't know this is a bad example).

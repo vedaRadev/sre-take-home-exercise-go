@@ -105,6 +105,10 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, 
 func extractDomain(url string) string {
 	urlSplit := strings.Split(url, "//")
 	domain := strings.Split(urlSplit[len(urlSplit)-1], "/")[0]
+	// domain names can't contain colons, so assume that everything after a colon
+	// is a port number and just get rid of it
+	colonIndex := strings.IndexByte(domain, ':')
+	if colonIndex != -1 { domain = domain[:colonIndex] }
 	return domain
 }
 
