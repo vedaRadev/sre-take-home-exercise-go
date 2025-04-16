@@ -14,6 +14,10 @@
   method: GET
   url: https://postman-echo.com/delay/5
 
+- name: postman echo -- times out after 500ms (4)
+  method: GET
+  url: https://postman-echo.com/delay/5
+
 - name: postman echo -- succeeds within 500ms
   method: GET
   url: https://postman-echo.com/get

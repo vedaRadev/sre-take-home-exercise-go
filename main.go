@@ -31,9 +31,6 @@ type DomainStats struct {
 	Total   int
 }
 
-var stats = make(map[string]*DomainStats)
-var statsMutex sync.Mutex
-
 type Semaphore chan struct{}
 func (s Semaphore) Down() { s <- struct{}{} }
 func (s Semaphore) Up() { <- s }
@@ -41,6 +38,56 @@ func NewSemaphore(capacity int) (Semaphore, error) {
 	if capacity <= 0 { return nil, fmt.Errorf("semaphore capacity must be greater than 0") }
 	return make(Semaphore, capacity), nil
 }
+
+type SyncedPrinter struct  { mu sync.Mutex }
+
+func (tsl *SyncedPrinter) Logf(format string, params ...any) {
+	tsl.mu.Lock()
+	defer tsl.mu.Unlock()
+	log.Printf(format, params...)
+}
+
+func (tsl *SyncedPrinter) LogfBypassLock(format string, params ...any) {
+	log.Printf(format, params...)
+}
+
+func (tsl *SyncedPrinter) LogLine(line string) {
+	tsl.mu.Lock()
+	defer tsl.mu.Unlock()
+	log.Println(line)
+}
+
+func (tsl *SyncedPrinter) LogLineBypassLock(line string) {
+	log.Println(line)
+}
+
+func (tsl *SyncedPrinter) Printf(format string, params ...any) {
+	tsl.mu.Lock()
+	defer tsl.mu.Unlock()
+	fmt.Printf(format, params...)
+}
+
+func (tsl *SyncedPrinter) PrintfBypassLock(format string, params ...any) {
+	fmt.Printf(format, params...)
+}
+
+func (tsl *SyncedPrinter) Println(line string) {
+	tsl.mu.Lock()
+	defer tsl.mu.Unlock()
+	fmt.Println(line)
+}
+
+func (tsl *SyncedPrinter) PrintlnBypassLock(line string) {
+	fmt.Println(line)
+}
+
+
+// TODO default to 10 or so but allow the the number of goroutines per domain for requests to be passed in via command line
+const MAX_CONCURRENCY_PER_DOMAIN int = 10
+const REQUEST_TIMEOUT_DURATION time.Duration = 500 * time.Millisecond
+var stats = make(map[string]*DomainStats)
+var statsMutex sync.Mutex
+var syncedPrinter SyncedPrinter
 
 func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, semaphore Semaphore) {
 	semaphore.Down()
@@ -51,7 +98,7 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, 
 
 	reqCtx := context.Background()
 	if !isTimeoutDisabled {
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 500 * time.Millisecond)
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), REQUEST_TIMEOUT_DURATION)
 		defer cancel()
 		reqCtx = timeoutCtx
 	}
@@ -59,7 +106,7 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, 
 	reqBody := bytes.NewReader([]byte(endpoint.Body))
 	req, err := http.NewRequestWithContext(reqCtx, endpoint.Method, endpoint.URL, reqBody)
 	if err != nil {
-		log.Printf("%v, %v to %v, error creating request: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
+		syncedPrinter.Logf("%v, %v to %v, error creating request: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
 		return
 	}
 
@@ -71,7 +118,7 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, 
 	resp, err := client.Do(req)
 	receivedTime := time.Now()
 	reqTime := receivedTime.Sub(sentTime)
-	log.Printf("%v, %v to %v responded or was aborted in %v\n", endpoint.Name, endpoint.Method, endpoint.URL, reqTime)
+	syncedPrinter.Logf("%v, %v to %v responded or was aborted in %v\n", endpoint.Name, endpoint.Method, endpoint.URL, reqTime)
 
 	domain := extractDomain(endpoint.URL)
 
@@ -82,23 +129,23 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup, 
 	// than it should be.
 	stats[domain].Total++
 	if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		log.Printf("%v, %v to %v: success\n", endpoint.Name, endpoint.Method, endpoint.URL)
+		syncedPrinter.Logf("%v, %v to %v: success\n", endpoint.Name, endpoint.Method, endpoint.URL)
 		stats[domain].Success++
 		statsMutex.Unlock()
 	} else {
 		statsMutex.Unlock()
 		if err != nil {
-			log.Printf("%v, %v to %v failed: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
+			syncedPrinter.Logf("%v, %v to %v failed: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
 			return
 		}
 
-		log.Printf("%v, %v to %v, response %v. Reading body...\n", endpoint.Name, endpoint.Method, endpoint.URL, resp.StatusCode)
+		syncedPrinter.Logf("%v, %v to %v, response %v. Reading body...\n", endpoint.Name, endpoint.Method, endpoint.URL, resp.StatusCode)
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Printf("%v, %v to %v: failed to read body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
+			syncedPrinter.Logf("%v, %v to %v: failed to read body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
 			return
 		}
-		log.Printf("%v, %v to %v, body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, string(bodyBytes))
+		syncedPrinter.Logf("%v, %v to %v, body: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, string(bodyBytes))
 	}
 }
 
@@ -112,8 +159,7 @@ func extractDomain(url string) string {
 	return domain
 }
 
-// TODO default to 10 or so but allow the the number of goroutines per domain for requests to be passed in via command line
-const MAX_CONCURRENCY_PER_DOMAIN int = 10
+var cycleCount int
 func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
 	var domainConcurrencyControl = make(map[string]Semaphore)
 	for _, endpoint := range endpoints {
@@ -128,32 +174,46 @@ func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
 		}
 	}
 
-	var wg sync.WaitGroup
 	for {
-		// TODO need to ensure that checks and logs run every 15 seconds regardless of the previous
-		// cycle completion. Right now we're doing our checks then waiting 15 seconds to try again
-		// regardless of the time the checks themselves took.
-		for _, endpoint := range endpoints {
-			wg.Add(1)
-			domain := extractDomain(endpoint.URL)
-			go checkHealth(endpoint, isTimeoutDisabled, &wg, domainConcurrencyControl[domain])
-		}
-		wg.Wait()
-		logResults()
+		go func() {
+			cycleCount += 1
+			thisCycleCount := cycleCount
+			var wg sync.WaitGroup
+			syncedPrinter.mu.Lock()
+			syncedPrinter.PrintlnBypassLock("==============================")
+			syncedPrinter.LogfBypassLock("CHECK CYCLE %v BEGIN\n", thisCycleCount)
+			syncedPrinter.PrintlnBypassLock("==============================")
+			syncedPrinter.mu.Unlock()
+			for _, endpoint := range endpoints {
+				wg.Add(1)
+				domain := extractDomain(endpoint.URL)
+				go checkHealth(endpoint, isTimeoutDisabled, &wg, domainConcurrencyControl[domain])
+			}
+			wg.Wait()
+			syncedPrinter.mu.Lock()
+			syncedPrinter.PrintlnBypassLock("==============================")
+			syncedPrinter.LogfBypassLock("CHECK CYCLE %v END\n", thisCycleCount)
+			syncedPrinter.PrintlnBypassLock("==============================")
+			syncedPrinter.mu.Unlock()
+			logResults()
+		}()
+
 		time.Sleep(15 * time.Second)
 	}
 }
 
 func logResults() {
 	statsMutex.Lock()
+	syncedPrinter.mu.Lock()
 	defer statsMutex.Unlock()
-	fmt.Println("==============================")
-	fmt.Println("AVAILABILITY REPORT")
+	defer syncedPrinter.mu.Unlock()
+	syncedPrinter.PrintlnBypassLock("==============================")
+	syncedPrinter.LogfBypassLock("AVAILABILITY REPORT")
 	for domain, stat := range stats {
 		percentage := int(math.Round(100 * float64(stat.Success) / float64(stat.Total)))
-		fmt.Printf("%s has %d%% availability\n", domain, percentage)
+		syncedPrinter.PrintfBypassLock("%s has %d%% availability\n", domain, percentage)
 	}
-	fmt.Println("==============================")
+	syncedPrinter.PrintlnBypassLock("==============================")
 }
 
 func main() {

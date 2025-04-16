@@ -114,3 +114,29 @@ determining the domain. But, more technically, there's not anything stopping
 someone from setting up a two different services to run on the same domain but
 different ports (for example, maybe a public API runs on port X but static
 content is served from port Y or something, I don't know this is a bad example).
+
+### Launch a goroutine to run the check cycle and availability report every 15 seconds, and also add a synced printing mechanism
+##### Discovery AND Why? (check cycle stuff)
+At this point I've run the code enough times and looked at it for long enough to
+see that we would run a check cycle, wait for it to finish, _then_ wait 15
+seconds to run the next checks.
+That means that if there are many, many endpoints or if we're timing out at the
+max 500ms on many requests, we might not launch a new check cycle for > 15 seconds.
+What we _really_ want is to _start_ a check cycle, then launch a new check cycle
+15 seconds later _regardless of whether the previous check cycle fully finished_.
+
+##### Why? (synced printing mechanism)
+It's technically possible that we launch another check cycle before we finish
+our previous check cycle.
+Given that I'm still just kind of spitting out tons of logs for debugging, it's
+likely that we'll print some information in the middle of printing an
+availability report, cluttering the output and making it hard to read.
+The little thread safe / synced logger I hacked together just ensures that
+information still looks relatively organized in the console.
+
+Also having a little centralized logger/printer makes it easy to enable/disable
+those debug logs (or implement some sort of log level system + filter) later on.
+Also also if I want to later on separate the availability printing from the
+check cycles so that we always print a report every 15 seconds instead of just
+whenever a check cycle ends (which takes an unknown amount of time), having this
+in place makes doing that a little easier.
