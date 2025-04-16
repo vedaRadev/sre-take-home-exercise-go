@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 	"context"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -31,8 +32,11 @@ type DomainStats struct {
 }
 
 var stats = make(map[string]*DomainStats)
+var statsMutex sync.Mutex
 
-func checkHealth(endpoint Endpoint, isTimeoutDisabled bool) {
+func checkHealth(endpoint Endpoint, isTimeoutDisabled bool, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	var client = &http.Client{}
 
 	reqCtx := context.Background()
@@ -41,7 +45,6 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool) {
 		defer cancel()
 		reqCtx = timeoutCtx
 	}
-
 
 	reqBody := bytes.NewReader([]byte(endpoint.Body))
 	req, err := http.NewRequestWithContext(reqCtx, endpoint.Method, endpoint.URL, reqBody)
@@ -61,11 +64,19 @@ func checkHealth(endpoint Endpoint, isTimeoutDisabled bool) {
 	log.Printf("%v, %v to %v responded or was aborted in %v\n", endpoint.Name, endpoint.Method, endpoint.URL, reqTime)
 
 	domain := extractDomain(endpoint.URL)
+
+	statsMutex.Lock()
+	// NOTE(RA): Explicitly NOT deferring mutex.Lock() here in favor of manuallying unlocking later
+	// because I don't want the mutex to be locked while doing extraneous things like reading body
+	// bytes on non-200-range responses, which could cause the  mutex to be locked for way longer
+	// than it should be.
 	stats[domain].Total++
 	if err == nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		log.Printf("%v, %v to %v: success\n", endpoint.Name, endpoint.Method, endpoint.URL)
 		stats[domain].Success++
+		statsMutex.Unlock()
 	} else {
+		statsMutex.Unlock()
 		if err != nil {
 			log.Printf("%v, %v to %v failed: %v\n", endpoint.Name, endpoint.Method, endpoint.URL, err)
 			return
@@ -95,10 +106,16 @@ func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
 		}
 	}
 
+	var wg sync.WaitGroup
 	for {
+		// TODO need to ensure that checks and logs run every 15 seconds regardless of the previous
+		// cycle completion. Right now we're doing our checks then waiting 15 seconds to try again
+		// regardless of the time the checks themselves took.
 		for _, endpoint := range endpoints {
-			checkHealth(endpoint, isTimeoutDisabled)
+			wg.Add(1)
+			go checkHealth(endpoint, isTimeoutDisabled, &wg)
 		}
+		wg.Wait()
 		logResults()
 		time.Sleep(15 * time.Second)
 	}
