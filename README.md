@@ -1,14 +1,65 @@
-Ryan Armstrong 2025
-
 # Fetch SRE Challenge
 
 ## About
 
-TODO description of the program
+This program takes a yaml configuration containing endpoint configs and checks
+domain availability every 15 seconds. Note that currently this does _not_ mean a
+report is printed every 15 seconds, but that a new check cycle is started every
+15 seconds. A report will be printed at the end of each check cycle.
+
+Endpoints are considered available if
+- They return a status code in the 200-range.
+- They respond within 500ms.
+
+Note that domain availability is cumulative, meaning if all endpoints of a
+domain succeed in cycle A but fail in cycle B, then the domain has an
+availability of 50%. 
+
+A valid YAML endpoint configuration is as follows:
+```
+name (string, required) - free-text name describing the HTTP endpoint
+url (string, required) - url of the endpoint, may be HTTP or HTTPS
+method (string, optional) - HTTP method, defaults to GET
+headers (dictionary, optional) - request headers
+body (string, optional) - request body
+```
 
 ## Installation
 
-TODO installation info
+Requirements
+- [Go](https://go.dev/doc/install) version 1.16 or later
+
+1. Clone this repository.
+2. Build with `go build` or run with `go run .`
+
+## Usage
+Note: You can also run this with `go run . <args>`.
+Note: Arguments are positional.
+```
+() = required, [] = optional
+
+fetch-sre-exercise (endpoint_config.yaml) [--no-req-timeout]
+```
+- `--no-req-timeout` - Disable the 500ms request deadline for debugging purposes.
+
+Terminate execution via `CTRL-C`.
+
+## Things I thought about but didn't do for the sake of time
+- Add additional command line args e.g. to disable certain debug logs or to
+  change the max number of in-flight requests per domain.
+- Publish the Go module.
+- Add a little CI/CD pipeline with Github Actions, including test runs
+- Cleaner central synchronized logger API (see fixes and improvements as to what
+  this is)
+- Echo logs to file (would be rolled into the central synchronized logger)
+
+## Things I didn't do for other reasons
+
+- Break out functions into separate files/packages, mostly because this program
+  is so small and I feel like breaking stuff into separate files would make the
+  code just harder to follow. If anything, the SyncedLogger is a nice candidate
+  to pull out into its own file, and I certainly would do that if it got any
+  bigger or more complicated.
 
 ## Fixes and Improvements
 Note: All fixes and improvements here are listed in the order they were added.
