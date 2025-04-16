@@ -1,6 +1,7 @@
 ##############################
 # POSTMAN ECHO
 ##############################
+
 - name: postman echo -- times out after 500ms (1)
   method: GET
   url: https://postman-echo.com/delay/5
@@ -46,8 +47,58 @@
   url: https://httpbin.org/status/500
 
 ##############################
+# Boot.dev blog
+##############################
+
+- name: bootdev blog (1)
+  url: "https://blog.boot.dev"
+
+- name: bootdev blog (2)
+  url: "https://blog.boot.dev/news/bootdev-beat-2025-04/"
+
+- name: bootdev blog (3)
+  url: "https://blog.boot.dev/news/bootdev-beat-2025-03/"
+
+- name: bootdev blog (4)
+  url: "https://blog.boot.dev/news/bootdev-beat-2025-02/"
+
+- name: bootdev blog (5)
+  url: "https://blog.boot.dev/news/bootdev-beat-2025-02/"
+
+- name: bootdev blog (6)
+  url: "https://blog.boot.dev/computer-science/18-months-with-gpt-4/"
+
+- name: bootdev blog (7)
+  url: "https://blog.boot.dev/news/bootdev-beat-2025-01/"
+
+- name: bootdev blog (8)
+  url: "https://blog.boot.dev/tutorials/python/lists/"
+
+- name: bootdev blog (9)
+  url: "https://blog.boot.dev/tutorials/python/loops/"
+
+- name: bootdev blog (10)
+  url: "https://blog.boot.dev/tutorials/python/functions/"
+
+- name: bootdev blog (11)
+  url: "https://blog.boot.dev/tutorials/python/variables/"
+
+- name: bootdev blog (12)
+  url: "https://blog.boot.dev/news/bootdev-beat-2024-12/"
+
+- name: bootdev blog (13)
+  url: "https://blog.boot.dev/news/bootdev-beat-2024-11/"
+
+- name: bootdev blog (14)
+  url: "https://blog.boot.dev/education/state-of-learning-to-code-2024/"
+
+- name: bootdev blog (15)
+  url: "https://blog.boot.dev/news/bootdev-beat-2024-10/"
+
+##############################
 # FETCH SRE SAMPLE DOMAIN
 ##############################
+
 - body: '{"foo":"bar"}'
   headers:
     content-type: application/json
