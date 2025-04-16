@@ -142,10 +142,13 @@ func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
 func logResults() {
 	statsMutex.Lock()
 	defer statsMutex.Unlock()
+	fmt.Println("==============================")
+	fmt.Println("AVAILABILITY REPORT")
 	for domain, stat := range stats {
 		percentage := int(math.Round(100 * float64(stat.Success) / float64(stat.Total)))
 		fmt.Printf("%s has %d%% availability\n", domain, percentage)
 	}
+	fmt.Println("==============================")
 }
 
 func main() {
