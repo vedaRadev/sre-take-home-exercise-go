@@ -40,9 +40,9 @@ Note: You can also run this with `go run . <args>`.
 fetch-sre-exercise (endpoint_config.yaml)
     [--no-req-timeout] [--debug-logs] [--max-domain-concurrency <int>]
 ```
-- `--no-req-timeout` - Disable the 500ms request deadline for debugging purposes.
-- `--debug-logs` - Enable debug logs
-- `--max-domain-concurrency <int>` - set max number of concurrent requests per domain per check cycle (must be > 0)
+- `--no-req-timeout` - Disable the 500ms request deadline for debugging purposes. Default: false.
+- `--debug-logs` - Enable debug logs. Default: false.
+- `--max-domain-concurrency <int>` - set max number of concurrent requests per domain per check cycle (must be > 0). Default: 10.
 
 Terminate execution via `CTRL-C`.
 
