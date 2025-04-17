@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	// TODO remove io/ioutil in favor of just io
-	"io/ioutil"
 	"io"
 	"log"
 	"math"
@@ -214,8 +212,7 @@ func main() {
 		log.Fatal("Usage: go run main.go <config_file> [--no-req-timeout] [--debug-logs]")
 	}
 
-	// TODO ioutil is deprecated as of Go 1.16. Use os.ReadFile instead.
-	data, err := ioutil.ReadFile(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		log.Fatal("Error reading file:", err)
 	}

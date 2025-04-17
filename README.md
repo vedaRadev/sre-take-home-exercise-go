@@ -200,3 +200,12 @@ N/A
 The debug logging I added clutters the screen and makes finding information
 harder. I implemented a slightly smarter arg parser since the previous way I was
 doing it wasn't flexible enough to support multiple flags in a convenient manner.
+
+### Remove `io.ioutil.ReadFile` in favor of `os.ReadFile
+##### Discovery
+LSP alerted me to the fact this was deprecated since Go 1.16. I just didn't get
+around to changing it until now.
+
+##### Why?
+"Cleanliness." `io.ioutil.ReadFile` just wraps `os.ReadFile` anyway. Features
+that are deprecated are usually likely to be removed in future versions.
