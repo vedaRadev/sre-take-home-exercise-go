@@ -34,7 +34,6 @@ Requirements
 
 ## Usage
 Note: You can also run this with `go run . <args>`.
-Note: Arguments are positional.
 ```
 () = required, [] = optional
 
