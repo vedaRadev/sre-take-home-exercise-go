@@ -37,10 +37,12 @@ Note: You can also run this with `go run . <args>`.
 ```
 () = required, [] = optional
 
-fetch-sre-exercise (endpoint_config.yaml) [--no-req-timeout] [--debug-logs]
+fetch-sre-exercise (endpoint_config.yaml)
+    [--no-req-timeout] [--debug-logs] [--max-domain-concurrency <int>]
 ```
 - `--no-req-timeout` - Disable the 500ms request deadline for debugging purposes.
 - `--debug-logs` - Enable debug logs
+- `--max-domain-concurrency <int>` - set max number of concurrent requests per domain per check cycle (must be > 0)
 
 Terminate execution via `CTRL-C`.
 
@@ -208,3 +210,10 @@ around to changing it until now.
 ##### Why?
 "Cleanliness." `io.ioutil.ReadFile` just wraps `os.ReadFile` anyway. Features
 that are deprecated are usually likely to be removed in future versions.
+
+### Allow user to specify the max concurrency per domain per check cycle
+##### Discovery
+N/A
+
+##### Why?
+Convenience, debugging

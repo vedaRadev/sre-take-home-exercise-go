@@ -12,6 +12,7 @@ import (
 	"context"
 	"sync"
 	"os"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -37,8 +38,6 @@ func NewSemaphore(capacity int) (Semaphore, error) {
 	return make(Semaphore, capacity), nil
 }
 
-// TODO default to 10 or so but allow the the number of goroutines per domain for requests to be passed in via command line
-const MAX_CONCURRENCY_PER_DOMAIN int = 10
 const REQUEST_TIMEOUT_DURATION time.Duration = 500 * time.Millisecond
 var stats = make(map[string]*DomainStats)
 var statsMutex sync.Mutex
@@ -121,7 +120,7 @@ func extractDomain(url string) string {
 }
 
 var cycleCount int
-func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
+func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool, maxConcurrencyPerDomain int) {
 	var domainConcurrencyControl = make(map[string]Semaphore)
 	for _, endpoint := range endpoints {
 		domain := extractDomain(endpoint.URL)
@@ -129,7 +128,7 @@ func monitorEndpoints(endpoints []Endpoint, isTimeoutDisabled bool) {
 			stats[domain] = &DomainStats{}
 		}
 		if domainConcurrencyControl[domain] == nil {
-			semaphore, err := NewSemaphore(MAX_CONCURRENCY_PER_DOMAIN)
+			semaphore, err := NewSemaphore(maxConcurrencyPerDomain)
 			if err != nil { log.Fatalf("failed to create semaphore for domain %v: %v", domain, err) }
 			domainConcurrencyControl[domain] = semaphore
 		}
@@ -184,9 +183,12 @@ func main() {
 	var filePath string
 	var isTimeoutDisabled bool
 	var isDebugEnabled bool
+	maxConcurrencyPerDomain := 10
 
 	filePathParsed := false
-	for _, arg := range os.Args[1:] {
+	args := os.Args[1:]
+	for argIdx := 0; argIdx < len(args); argIdx++ {
+		arg := args[argIdx]
 		if strings.HasPrefix(arg, "--") {
 			switch arg[2:] {
 
@@ -195,6 +197,21 @@ func main() {
 
 			case "debug-logs":
 				isDebugEnabled = true
+
+			case "max-domain-concurrency":
+				argIdx++
+				if argIdx < len(args) {
+					val, err := strconv.Atoi(args[argIdx])
+					if err != nil {
+						log.Fatalf("invalid max-domain-concurrency value, expected integer but got %v", args[argIdx])
+					}
+					if val <= 0 {
+						log.Fatal("max-domain-concurrency must be greater than 0")
+					}
+					maxConcurrencyPerDomain = val
+				} else {
+					log.Fatal("max-domain-concurrency requires an integer value")
+				}
 
 			default:
 				log.Fatal("unrecognized flag: ", arg)
@@ -209,7 +226,7 @@ func main() {
 	}
 
 	if filePath == "" {
-		log.Fatal("Usage: go run main.go <config_file> [--no-req-timeout] [--debug-logs]")
+		log.Fatal("Usage: go run main.go <config_file> [--no-req-timeout] [--debug-logs] [--max-domain-concurrency <int>]")
 	}
 
 	data, err := os.ReadFile(filePath)
@@ -229,5 +246,5 @@ func main() {
 	}
 
 	syncedPrinter.debugEnabled = isDebugEnabled
-	monitorEndpoints(endpoints, isTimeoutDisabled)
+	monitorEndpoints(endpoints, isTimeoutDisabled, maxConcurrencyPerDomain)
 }
