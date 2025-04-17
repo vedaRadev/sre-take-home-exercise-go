@@ -38,15 +38,14 @@ Note: Arguments are positional.
 ```
 () = required, [] = optional
 
-fetch-sre-exercise (endpoint_config.yaml) [--no-req-timeout]
+fetch-sre-exercise (endpoint_config.yaml) [--no-req-timeout] [--debug-logs]
 ```
 - `--no-req-timeout` - Disable the 500ms request deadline for debugging purposes.
+- `--debug-logs` - Enable debug logs
 
 Terminate execution via `CTRL-C`.
 
 ## Things I thought about but didn't do for the sake of time
-- Add additional command line args e.g. to disable certain debug logs or to
-  change the max number of in-flight requests per domain.
 - Publish the Go module.
 - Add a little CI/CD pipeline with Github Actions, including test runs
 - Cleaner central synchronized logger API (see fixes and improvements as to what
@@ -57,12 +56,13 @@ Terminate execution via `CTRL-C`.
 
 - Break out functions into separate files/packages, mostly because this program
   is so small and I feel like breaking stuff into separate files would make the
-  code just harder to follow. If anything, the SyncedLogger is a nice candidate
-  to pull out into its own file, and I certainly would do that if it got any
-  bigger or more complicated.
+  code just harder to follow. (I did eventually break out SyncedPrinter into its
+  own file because it got large enough to warrant it, and it was obvious it was
+  its own self-contained entity.)
 
 ## Fixes and Improvements
 Note: All fixes and improvements here are listed in the order they were added.
+Some build off changes made for previous fixes and improvements.
 
 ### Added additional logging
 ##### Discovery
@@ -191,3 +191,12 @@ Also also if I want to later on separate the availability printing from the
 check cycles so that we always print a report every 15 seconds instead of just
 whenever a check cycle ends (which takes an unknown amount of time), having this
 in place makes doing that a little easier.
+
+### Add debug and normal logging/printing, update arg parsing, debug logs are disabled by default
+##### Discovery
+N/A
+
+##### Why?
+The debug logging I added clutters the screen and makes finding information
+harder. I implemented a slightly smarter arg parser since the previous way I was
+doing it wasn't flexible enough to support multiple flags in a convenient manner.
